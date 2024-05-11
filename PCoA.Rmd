@@ -1,0 +1,247 @@
+```{r warning=FALSE, message=FALSE}
+library(ape)
+library(vegan)
+library(plyr)
+library(dplyr)
+library(scales)
+library(grid)
+library(reshape2)
+library(phyloseq)
+library(magrittr)
+library(ggplot2)
+library(ggpubr)
+library(data.table)
+library(tidyr)
+library(tidyverse)
+library(microViz)
+library(ggforce)
+```
+
+
+```{r}
+otus <- read.table("D:/PP/4/senior project/Data/CrustTemp216SasvUN3.asv_table.fix.txt",header=T,sep="\t",row.names=1)
+otumat <- as(as.matrix(otus), "matrix")
+OTU = otu_table(otumat, taxa_are_rows = TRUE)
+```
+
+```{r}
+taxmat <- read.table("D:/PP/4/senior project/Data/CrustTemp216SasvUN3.taxonomy_file_fix.txt", header=T,sep="\t",row.names=1)
+taxmat <- as(as.matrix(taxmat),"matrix")
+TAX <- tax_table(taxmat)
+```
+
+```{r}
+meta <- read.table("D:/PP/4/senior project/Data/CrustTemp216SasvUN3.mapping_file_fix.txt",header=TRUE,row.names=1,sep="\t",stringsAsFactors=FALSE)
+```
+
+
+```{r}
+MyTree2 <- read.tree("D:/PP/4/senior project/Data/tree.nwk")
+
+```
+
+
+```{r warning=FALSE}
+sampleData <- sample_data(meta)
+```
+
+
+```{r warning=FALSE}
+physeq = phyloseq(OTU,TAX,sampleData,MyTree2)
+physeq
+```
+```{r}
+physeq <- subset_taxa(physeq, Kingdom == "Bacteria")
+physeq
+```
+
+```{r }
+physeq.prune = prune_taxa(taxa_sums(physeq) > 1, physeq)
+physeq.prune
+```
+
+CLR transform
+```{r}
+physeq_clr = microbiome::transform(physeq.prune,"clr")
+physeq_clr
+```
+
+Non CLR
+```{r}
+#phyloseq::otu_table(physeq.prune.rarefy)[1:5, 1:5]
+```
+CLR 
+```{r}
+phyloseq::otu_table(physeq_clr)[1:5, 1:5]
+```
+
+```{r}
+physeq_clr_ord <- ordinate(physeq.prune,method = "PCoA",distance =  "Unifrac")
+```
+
+```{r}
+sample_data(physeq.prune)$Incubation = factor(sample_data(physeq.prune)$Incubation, levels = c("0.05", "1", "24", "48", "96"))
+```
+
+```{r}
+ps.dist.all = phyloseq::distance(physeq.prune, "Unifrac")
+```
+
+```{r}
+adonis(ps.dist.all ~Incubation*Crusttype, as(sample_data(physeq.prune),"data.frame"))
+```
+
+```{r}
+pslayer = plot_ordination(physeq.prune, physeq_clr_ord, type = "samples", color = "Incubation", shape = "Crusttype") + ggtitle("Bacterial Beta Diversity (PCoA) Overall") + 
+  annotate("text", x = 0.1, y = 0.45, label = "PERMANOVA, p = 0.001") +
+  geom_point(size=5) + scale_colour_manual(values = c("#C0392B","#7D3C98","#138D75", "#CA6F1E", "#2C3E50")) + 
+  theme_pubr(legend = "right", border = TRUE) + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+pslayer
+```
+
+```{r}
+png("./Figures/Beta.Div.All_by.png",units = "in", width = 7.5, height = 6, res = 600 )
+pslayer
+dev.off()
+```
+
+#LAC
+
+```{r}
+physeq.prune.LAC <- subset_samples(physeq.prune, Crusttype == "LAC")
+physeq.prune.LAC
+```
+
+CLR transform
+```{r}
+physeq_LAC_clr = microbiome::transform(physeq.prune.LAC,"clr")
+physeq_LAC_clr
+```
+CLR 
+```{r}
+phyloseq::otu_table(physeq_LAC_clr)[1:5, 1:5]
+```
+
+```{r}
+physeq_ord <- ordinate(physeq.prune.LAC,method = "PCoA",distance =  "Unifrac")
+```
+
+```{r}
+sample_data(physeq.prune.LAC)$Incubation = factor(sample_data(physeq.prune.LAC)$Incubation, levels = c("0.05", "1", "24", "48", "96"))
+```
+
+```{r}
+ps.dist = phyloseq::distance(physeq.prune.LAC, "Unifrac")
+```
+
+#ps.dist ~Incubation is formula 'Y ~ A + B*C'
+```{r}
+adonis(ps.dist ~Incubation, as(sample_data(physeq.prune.LAC),"data.frame"))
+```
+
+```{r}
+pslayer.LAC = plot_ordination(physeq.prune.LAC, physeq_ord, type = "samples",color = "Incubation") + ggtitle("Bacterial Beta Diversity (PCoA) by LAC Incubation") + 
+  annotate("text", x = 0.3, y = 0.4, cex = 4.5, label = "PERMANOVA, p = 0.001") + 
+  geom_point(size=5) + scale_colour_manual(values = c("#000000","skyblue1","#009E73", "#E69F00", "orangered", "red", "blue")) + 
+  theme_pubr(legend = "right", border = TRUE) + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+pslayer.LAC
+```
+
+```{r}
+pslayer.LAC.label = plot_ordination(physeq.prune.LAC, physeq_ord, type = "samples",color = "Incubation") + ggtitle("Bacterial Beta Diversity (PCoA) by LAC Incubation") + 
+  annotate("text",x = 0.2, y = 0.4, label = "PERMANOVA, p = 0.001") + 
+  geom_point(size=4) + scale_colour_manual(values = c("#C0392B","#7D3C98","#138D75", "#CA6F1E", "#2C3E50")) + 
+  theme_pubr(legend = "right", border = TRUE) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_mark_ellipse(aes(color = Incubation,
+                        label = NULL),
+                    expand = unit(0.5,"mm"),
+                    label.buffer = unit(-5, 'mm'))
+
+pslayer.LAC.label
+```
+
+```{r}
+png("./Figures/LAC4 Beta.Div_by_incubation.png",units = "in", width = 7.5, height = 6, res = 600 )
+pslayer.LAC 
+dev.off()
+```
+
+```{r}
+png("./Figures/LAC Beta.Div.label_by_incubation.ellipse.png",units = "in", width = 8, height = 6, res = 600 )
+pslayer.LAC.label
+dev.off()
+```
+#CLC
+
+```{r}
+physeq.prune.CLC <- subset_samples(physeq.prune, Crusttype == "CLC")
+physeq.prune.CLC
+```
+
+CLR transform
+```{r}
+physeq_CLC_clr = microbiome::transform(physeq.prune.CLC,"clr")
+physeq_CLC_clr
+```
+
+CLR 
+```{r}
+phyloseq::otu_table(physeq_CLC_clr)[1:5, 1:5]
+```
+
+```{r}
+physeq_CLC_ord <- ordinate(physeq.prune.CLC,method = "PCoA",distance =  "Unifrac")
+```
+
+```{r}
+sample_data(physeq.prune.CLC)$Incubation = factor(sample_data(physeq.prune.CLC)$Incubation, levels = c("0.05", "1", "24", "48", "96"))
+```
+
+
+```{r}
+ps.dist.CLC = phyloseq::distance(physeq.prune.CLC, "Unifrac")
+```
+
+#ps.dist ~Incubation is formula 'Y ~ A + B*C'
+```{r}
+adonis(ps.dist.CLC ~Incubation, as(sample_data(physeq.prune.CLC),"data.frame"))
+```
+
+```{r}
+pslayer.CLC = plot_ordination(physeq.prune.CLC, physeq_CLC_ord, type = "samples",color = "Incubation") + ggtitle("Bacterial Beta Diversity (PCoA) of CLC by Incubation") + 
+  annotate("text", x = 0.15, y = 0.5, cex = 4.5, label = "PERMANOVA, p = 0.001") + 
+  geom_point(size=5) + scale_colour_manual(values = c("#000000","skyblue1","#009E73", "#E69F00", "orangered", "red", "blue")) + 
+  theme_pubr(legend = "right", border = TRUE) + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+pslayer.CLC
+```
+
+```{r}
+pslayer.CLC.label = plot_ordination(physeq.prune.CLC, physeq_CLC_ord, type = "samples",color = "Incubation") + ggtitle("Bacterial Beta Diversity (PCoA) by CLC Incubation") + 
+  annotate("text", x = -0.10, y = 0.5,cex = 5.5, label = "PERMANOVA, p = 0.001") + 
+  geom_point(size=4) + scale_colour_manual(values = c("#C0392B","#7D3C98","#138D75", "#CA6F1E", "#2C3E50")) + 
+  theme_pubr(legend = "right", border = TRUE) + 
+  geom_mark_ellipse(aes(color = Incubation,
+                        label=NULL),
+                    expand = unit(0.5,"mm"),
+                    label.buffer = unit(-5, 'mm'))
+
+pslayer.CLC.label
+```
+```{r}
+png("./Figures/[PCOA]1CLC Beta.Div_by_incubation.png",units = "in", width = 7.5, height = 6, res = 600 )
+pslayer.CLC
+dev.off()
+```
+
+```{r}
+png("./Figures/[PCOA]CLC_Beta.Div.label_by_incubation.ellipse.png",units = "in", width = 8, height = 6, res = 600 )
+pslayer.CLC.label
+dev.off()
+```
