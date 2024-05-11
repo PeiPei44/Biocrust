@@ -1,0 +1,255 @@
+```{r}
+library(ape)
+library(vegan)
+library(plyr)
+library(dplyr)
+library(scales)
+library(grid)
+library(reshape2)
+library(phyloseq)
+library(magrittr)
+library(ggplot2)
+library(ggpubr)
+library(data.table)
+library(tidyr)
+library(tidyverse)
+library(multcompView)
+library(VennDiagram)
+library(car)
+```
+
+```{r}
+taxmat <- read.table("D:/PP/4/senior project/Data/CrustTemp216SasvUN3.taxonomy_file_fix.txt", header=T,sep="\t",row.names=1)
+taxmat <- as(as.matrix(taxmat),"matrix")
+TAX <- tax_table(taxmat)
+```
+
+```{r}
+otus <- read.table("D:/PP/4/senior project/Data/CrustTemp216SasvUN3.asv_table.fix.txt",header=T,sep="\t",row.names=1)
+otumat <- as(as.matrix(otus), "matrix")
+OTU <- otu_table(otumat, taxa_are_rows = TRUE)
+```
+
+```{r}
+meta <- read.table("D:/PP/4/senior project/Data/CrustTemp216SasvUN3.mapping_file_fix.txt",header=TRUE,row.names=1,sep="\t",stringsAsFactors=FALSE)
+```
+D:/PP/4/senior project/Data/CrustTemp216SasvUN3.mapping_file_fix.txt"
+```{r}
+meta
+```
+```{r}
+head(meta)
+```
+```{r}
+sampleData <- sample_data(meta)
+```
+```{r}
+physeq <- phyloseq(OTU,TAX,sampleData)
+physeq
+```
+```{r}
+physeq <- subset_taxa(physeq, Kingdom == "Bacteria")
+physeq
+```
+```{r}
+physeq.prune = prune_taxa(taxa_sums(physeq) > 1, physeq)
+physeq.prune
+```
+```{r}
+physeq.LAC <- subset_samples(physeq.prune, Crusttype=="LAC")
+physeq.LAC
+```
+```{r}
+phygloGlom.LAC = tax_glom(physeq.LAC,taxrank = "Species")
+tax_table(phygloGlom.LAC)
+```
+
+```{r}
+tax.bac <- as(tax_table(physeq.LAC),"matrix")
+head(tax.bac)
+tax.bac[is.na(tax.bac)] <- "Unknown"
+tax_table(tax.bac)
+```
+```{r}
+TAX.bac <- tax_table(tax.bac)
+bac.3 <- phyloseq(sample_data(physeq.LAC),otu_table(physeq.LAC),TAX.bac)
+bac.3
+```
+```{r}
+glom.bac <- speedyseq::tax_glom(bac.3,taxrank = "Phylum")
+glom.bac
+```
+```{r}
+head(tax_table(glom.bac))
+```
+
+```{r}
+bac.abund <- merge_samples(glom.bac, "Incubation")
+sample_data(bac.abund)$Incubation <- factor(sample_names(bac.abund))
+bac.abund = transform_sample_counts(bac.abund, function(x) x / sum(x))
+bac.abund
+```
+
+
+```{r}
+data_glom.bac <- speedyseq::psmelt(bac.abund)
+data_glom.bac$Phylum <- as.character(data_glom.bac$Phylum)
+```
+
+```{r}
+data_glom.bac$Phylum[data_glom.bac$Abundance < 0.01]<- "<1% abund."
+```
+
+```{r}
+Count = length(unique(data_glom.bac$Phylum))
+Count
+```
+```{r}
+unique((data_glom.bac$Phylum))
+```
+```{r}
+data_glom.bac$Order <- factor(data_glom.bac$Order, levels = c("Cyanobacteria", "Proteobacteria", "Firmicutes", "Bacteroidetes", "Actinobacteria", "Gemmatimonadetes", "Chloroflexi","<1% abund."))
+```
+
+```{r}
+data_glom.bac$Incubation = factor(data_glom.bac$Incubation, levels = c("0.05", "1", "24", "48", "96"))
+```
+
+
+```{r fig.height=5, fig.width=8, fig.align="center"}
+# The palette with black:
+cbbPalette <- c("Cyanobacteria"="#1AA260", "Proteobacteria"="#C04000", "Firmicutes"="#F87217", "Bacteroidetes"="#7D0541", "Actinobacteria"="#342D7E", "Gemmatimonadetes"="#E9AB17", "Chloroflexi"="#7F462C", "<1% abund."="#36454F")
+taxcom_layer_pl = ggplot(data = data_glom.bac, mapping = aes_string(x = "Incubation" ,y = "Abundance", fill = "Phylum" )) + 
+  geom_bar(stat="identity", position="fill") + 
+  ggtitle("LAC Bacterial Taxonomic Composition (Phylum level) by Incubation Time")+
+  theme_pubr(border= TRUE) + 
+  theme(plot.title = element_text(hjust = 0.5)) + scale_fill_manual(values = cbbPalette) +  
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5))
+print(taxcom_layer_pl + theme(legend.position="bottom") + guides(fill=guide_legend(nrow=2)))
+```
+
+```{r}
+png("./Figures/LAC_Taxa3Phylum_level_by_incubation_small.png", units="in", width = 8, height = 5.5, res = 600 )
+taxcom_layer_pl + theme(legend.position="bottom") + guides(fill=guide_legend(nrow=2)) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off()
+```
+
+```{r}
+# Extract percentage data
+percentage_data <- data_glom.bac %>%
+  group_by(Incubation, Phylum) %>%
+  summarize(Percentage = sum(Abundance)) %>%
+  group_by(Incubation) %>%
+  mutate(Percentage = Percentage / sum(Percentage) * 100) %>%
+  gather(key = "Phylum", value = "Percentage", -Incubation)
+
+# View the percentage data
+print(percentage_data)
+
+```
+```{r}
+write.csv(percentage_data, file = "LAC_Phylum_percentage_data.csv", row.names = FALSE)
+```
+
+#CLC
+
+```{r}
+physeq.CLC = subset_samples(physeq.prune, Crusttype=="CLC")
+physeq.CLC
+```
+```{r}
+phygloGlom.CLC = tax_glom(physeq.CLC,taxrank = "Species")
+tax_table(phygloGlom.CLC)
+```
+
+
+```{r}
+tax.bac <- as(tax_table(physeq.CLC),"matrix")
+head(tax.bac)
+tax.bac[is.na(tax.bac)] <- "Unknown"
+head(tax.bac)
+```
+```{r}
+TAX.bac <- tax_table(tax.bac)
+bac.3 <- phyloseq(sample_data(physeq.CLC),otu_table(physeq.CLC),TAX.bac)
+bac.3
+```
+```{r}
+glom.bac <- speedyseq::tax_glom(bac.3,taxrank = "Phylum")
+glom.bac
+```
+```{r}
+head(tax_table(glom.bac))
+```
+
+```{r}
+bac.abund <- merge_samples(glom.bac, "Incubation")
+sample_data(bac.abund)$Incubation <- factor(sample_names(bac.abund))
+bac.abund = transform_sample_counts(bac.abund, function(x) x / sum(x))
+bac.abund
+```
+
+```{r}
+data_glom.bac <- speedyseq::psmelt(bac.abund)
+data_glom.bac$Phylum <- as.character(data_glom.bac$Phylum)
+```
+
+```{r}
+data_glom.bac$Phylum[data_glom.bac$Abundance < 0.01] <- "<0.1% abund."
+```
+
+```{r}
+Count = length(unique(data_glom.bac$Phylum))
+Count
+```
+
+
+```{r}
+unique((data_glom.bac$Phylum))
+```
+
+```{r}
+#for CLC Phylum
+data_glom.bac$Phylum <- factor(data_glom.bac$Phylum, levels = c("Cyanobacteria", "Proteobacteria", "Actinobacteria", "Firmicutes", "Gemmatimonadetes", "Bacteroidetes", "Chloroflexi", "Planctomycetes" , "Acidobacteria", "<0.1% abund." ))
+```
+
+```{r}
+data_glom.bac$Incubation = factor(data_glom.bac$Incubation, levels = c("0.05", "1", "24", "48", "96"))
+```
+
+```{r fig.height=5, fig.width=8, fig.align="center"}
+# The palette with black:
+cbbPalette <- c("Cyanobacteria"="#1AA260", "Proteobacteria"="#C04000", "Firmicutes"="#F87217", "Bacteroidetes"="#7D0541", "Actinobacteria"="#342D7E", "Gemmatimonadetes"="#E9AB17", "Chloroflexi"="#7F462C","Planctomycetes"="#00FF00",  "Acidobacteria"="#FF00FF", "<0.1% abund."="#3D3C3A")
+taxcom_layer_pl = ggplot(data = data_glom.bac, mapping = aes_string(x = "Incubation" ,y = "Abundance", fill = "Phylum" )) + 
+  geom_bar(stat="identity", position="fill") + 
+  ggtitle("CLC Bacterial Taxonomic Composition (Phylum level) by Incubation Time")+
+  theme_pubr(border= TRUE) + 
+  theme(plot.title = element_text(hjust = 0.5)) + scale_fill_manual(values = cbbPalette) +  
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5))
+print(taxcom_layer_pl + theme(legend.position="bottom") + guides(fill=guide_legend(nrow=3)))
+```
+```{r}
+png("./Figures/CLC_Taxa4_Phylum_level_by_incubationsmall.png", units="in", width = 8.5, height = 5.5, res = 600 )
+taxcom_layer_pl + theme(legend.position="bottom") + guides(fill=guide_legend(nrow=3)) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off()
+```
+
+```{r}
+# Extract percentage data
+percentage_data <- data_glom.bac %>%
+  group_by(Incubation, Phylum) %>%
+  summarize(Percentage = sum(Abundance)) %>%
+  group_by(Incubation) %>%
+  mutate(Percentage = Percentage / sum(Percentage) * 100) %>%
+  gather(key = "Phylum", value = "Percentage", -Incubation)
+
+# View the percentage data
+print(percentage_data)
+
+#write.csv(percentage_data, file = "CLC_Order_percentage_data.csv", row.names = FALSE)
+```
+```{r}
+write.csv(percentage_data, file = "CLC_Phylum_percentage_data.csv", row.names = FALSE)
+```
+
+
