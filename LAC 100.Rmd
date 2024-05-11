@@ -1,0 +1,220 @@
+```{r}
+getwd()
+```
+```{r warning=FALSE, message=FALSE}
+library(ape)
+library(vegan)
+library(plyr)
+library(dplyr)
+library(scales)
+library(grid)
+library(reshape2)
+library(phyloseq)
+library(magrittr)
+library(ggplot2)
+library(ggpubr)
+library(data.table)
+library(tidyr)
+library(labdsv)
+```
+
+
+```{r}
+otus <- read.table("D:/PP/4/senior project/Data/CrustTemp216SasvUN3.asv_table.fix.txt",header=T,sep="\t",row.names=1)
+otumat <- as(as.matrix(otus), "matrix")
+OTU = otu_table(otumat, taxa_are_rows = TRUE)
+```
+
+```{r}
+taxmat <- read.table("D:/PP/4/senior project/Data/indicator 100 LAC.txt", header=T,sep="\t",row.names=1)
+taxmat <- as(as.matrix(taxmat),"matrix")
+TAX <- tax_table(taxmat)
+```
+
+```{r}
+MyTree2 <- read.tree("D:/PP/4/senior project/Data/tree.nwk")
+```
+
+```{r}
+meta <- read.table("D:/PP/4/senior project/Data/CrustTemp216SasvUN3.mapping_file_fix.txt",header=TRUE,row.names=1,sep="\t",stringsAsFactors=FALSE)
+```
+
+
+```{r warning=FALSE}
+sampleData <- sample_data(meta)
+```
+
+```{r warning=FALSE}
+physeq = phyloseq(OTU,TAX,sampleData,tree)
+physeq
+```
+```{r}
+physeq.prune <- subset_taxa(physeq, Kingdom == "Bacteria")
+physeq.prune
+```
+
+```{r}
+physeq.prune = prune_taxa(taxa_sums(physeq.prune) > 1, physeq.prune)
+physeq.prune
+```
+
+
+```{r}
+physeq.LAC <- subset_samples(physeq.prune, Crusttype=="LAC")
+physeq.LAC
+```
+
+```{r}
+physeq.prune.merge.Incubation <- merge_samples(physeq.LAC, "Incubation")
+sample_data(physeq.prune.merge.Incubation)$Crust_type <- factor(sample_names(physeq.prune.merge.Incubation))
+physeq.prune.merge.Incubation
+```
+
+```{r}
+phyloGlom.LAC = tax_glom(physeq.LAC,taxrank = "Species")
+
+```
+
+```{r}
+glomTax.LAC = tax_table(phyloGlom.LAC)[,"OTU_ID"]
+glomTax.LAC
+
+```
+
+```{r}
+glomOTU.LAC = otu_table(phyloGlom.LAC)
+glomTable.LAC = merge(glomOTU.LAC,glomTax.LAC,by=0,all=TRUE)
+```
+
+```{r}
+rownames(glomTable.LAC) = glomTable.LAC[,"OTU_ID"]
+glomTable.LAC$Row.names = NULL
+glomTable.LAC$OTU_ID = NULL
+```
+
+```{r}
+write.csv(glomTable.LAC, file="GlomerateTabe.LAC100-2.csv")
+```
+
+
+```{r}
+ASV.LAC = t(glomTable.LAC)
+```
+
+```{r}
+ASV.no0.LAC = ASV.LAC[, colSums(ASV.LAC != 0) > 0]
+```
+
+```{r}
+write.csv(ASV.LAC, file="ASV.no.0.LAC3.csv")
+```
+
+```{r}
+Incubation.LAC = subset(sampleData,select = "Incubation")
+```
+
+```{r}
+Incubation.LAC.indic = indval(ASV.no0.LAC,Incubation.LAC$Incubation)
+```
+
+```{r}
+summary(Incubation.LAC.indic, p = 0.05, type = "short")
+```
+
+
+```{r}
+summary(Incubation.LAC.indic, p = 0.05, type = "long")
+```
+
+```{r}
+Incubation.LAC.indic$indval
+```
+
+```{r}
+Incubation.LAC.indic$indcls
+```
+
+
+```{r}
+write.csv(indvalsummary.LAC, file = "Indval summary table_LAC100-2.csv", append = FALSE, sep = "\t", dec = ".",
+            row.names = TRUE, col.names = TRUE)
+```
+
+```{r}
+Incubation.LAC.indic.indval = as.data.frame(Incubation.LAC.indic$indval)
+Incubation.LAC.indic.indval
+```
+
+```{r}
+write.csv(Incubation.LAC.indic.indval, file = "Indval table_LAC100-2.csv", append = FALSE, sep = "\t", dec = ".",
+            row.names = TRUE, col.names = TRUE)
+```
+
+
+```{r}
+Incubation.LAC.indic.indval_filtered = Incubation.LAC.indic.indval[row.names(Incubation.LAC.indic.indval) %in% row.names(indvalsummary.LAC),]
+Incubation.LAC.indic.indval_filtered
+```
+
+```{r}
+write.csv(Incubation.LAC.indic.indval_filtered, file = "Match Indval table_LAC100-2.csv", append = FALSE, sep = "\t", dec = ".",
+            row.names = TRUE, col.names = TRUE)
+```
+
+```{r}
+indic.LAC.otumat <- as(as.matrix(Incubation.LAC.indic.indval_filtered), "matrix")
+indic.LAC.OTU = otu_table(indic.LAC.otumat, taxa_are_rows = TRUE)
+```
+
+```{r warning=FALSE}
+indic.LAC.meta = read.table("D:/PP/4/senior project/Data/Fun.indic.meta.Incubation.tsv",
+                  header=TRUE, row.names = 1,
+                  sep="\t",stringsAsFactors=FALSE)
+```
+
+```{r warning=FALSE}
+indic.LAC.sampleData <- sample_data(indic.LAC.meta)
+```
+
+```{r warning=FALSE}
+indic.LAC.physeq = phyloseq(indic.LAC.OTU,TAX,indic.LAC.sampleData)
+indic.LAC.physeq
+```
+
+```{r}
+indic.LAC.physeq.TAX = tax_table(indic.LAC.physeq)
+indic.LAC.physeq.OTU.Tax.tab = merge(indvalsummary.LAC,indic.LAC.physeq.TAX,by=0,all=TRUE)
+indic.LAC.physeq.OTU.Tax.tab
+```
+
+```{r}
+write.csv(indic.LAC.physeq.OTU.Tax.tab, file="Fun.indvalsummary.Incubation.LAC100-2.csv")
+```
+
+```{r}
+indic.LAC.physeq.TAX = tax_table(indic.LAC.physeq)
+indic.LAC.physeq.OTU.Tax.tab = merge(indic.LAC.OTU,indic.LAC.physeq.TAX,by=0,all=TRUE)
+indic.LAC.physeq.OTU.Tax.tab
+```
+
+```{r}
+write.csv(indic.LAC.physeq.OTU.Tax.tab, file="Fun.indval.Incubation.LAC100-2.csv")
+```
+
+
+
+```{r}
+Heatmap.indic.LAC.physeq
+```
+```{r}
+sample_data(physeq.LAC)$Incubation = factor(sample_data(physeq.LAC)$Incubation, levels = c("0.05", "1", "24", "48", "96"))
+```
+
+```{r}
+Heatmap.indic.LAC.physeq.plot = plot_heatmap(physeq.LAC, "PCoA", "bray", sample.label = NULL ,"Species", sample = c("0.05", "1", "24", "48", "96"))+ ggtitle("LAC Bacterial indicator Species heatmap (P < 0.05)") + theme(plot.title = element_text(hjust = 0.5))
+print(Heatmap.indic.LAC.physeq.plot)
+```
+```{r}
+class(Heatmap.indic.LAC.physeq)
+```
+
